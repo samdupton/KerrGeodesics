@@ -2,9 +2,18 @@
 
 Print["Mathematica Version: ", $Version];
 
+withinRoundoff[a_, b_] :=
+  (* Ignore the last N machine digits *)
+  Block[{Internal`$SameQTolerance = 4},
+    SameQ[a,b]];
+
 PrependTo[$Path, FileNameDrop[ExpandFileName[First[$ScriptCommandLine]],-3]];
 
 << KerrGeodesics`
+
+withinRoundoff[a_, b_] := 
+  Block[{Internal`$SameQTolerance = 4}, 
+   SameQ[a, b]];(*Ignore the last N machine digits*)
 
 testFiles = FileNames["*.wlt", 
   FileNameJoin[{$KerrGeodesicsInstallationDirectory, "Tests"}]];
@@ -40,12 +49,25 @@ testResultXML[result_] :=
 ];
 
 testsuiteXML[report_] :=
-  XMLElement["testsuite",
-    {"name" -> report["Title"],
-     "tests" -> ToString[report["TestsSucceededCount"] + report["TestsFailedCount"]],
-     "failures" -> ToString[report["TestsFailedCount"]],
-     "time" -> ToString[QuantityMagnitude[report["TimeElapsed"], "Seconds"]]},
-    Map[testResultXML, Values[report["TestResults"]]]];
+ Module[{xml},
+  If[MatchQ[report["TestResults"], <| {"Event", "Fatal"} -> __ |>],
+    xml = XMLElement["testsuite",
+      {"name" -> report["Title"],
+       "tests" -> "1",
+       "failures" -> "1",
+       "time" -> ToString[QuantityMagnitude[report["TimeElapsed"], "Seconds"]]},
+      {XMLElement["testcase", {"name" -> "Loading test file"},
+                  {XMLElement["failure", {}, {XMLObject["CDATASection"]["Error reading file"]}]}]}
+      ];,
+    xml = XMLElement["testsuite",
+      {"name" -> report["Title"],
+       "tests" -> ToString[report["TestsSucceededCount"] + report["TestsFailedCount"]],
+       "failures" -> ToString[report["TestsFailedCount"]],
+       "time" -> ToString[QuantityMagnitude[report["TimeElapsed"], "Seconds"]]},
+        Map[testResultXML, Values[report["TestResults"]]]];
+  ];
+  xml
+];
 
 xml = XMLObject["Document"][{XMLObject["Declaration"]["Version" -> "1.0",  "Encoding" -> "UTF-8"]}, 
   XMLElement[
